@@ -1,19 +1,25 @@
 services:
   postgres:
-    image: postgres:14.5
-    container_name: postgres_14_5
+    image: postgres:18
+    container_name: postgres_18
     restart: unless-stopped
+    command: >
+      postgres 
+      -c shared_preload_libraries=pg_stat_statements
+      -c pg_stat_statements.track=all
+      -c pg_stat_statements.max=10000
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
-      PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data/pgdata
       # Подключаем SQL дамп для автоматической загрузки при первом запуске
       - ./demo_small.sql:/docker-entrypoint-initdb.d/demo_small.sql
+      # Подключаем скрипт инициализации расширений
+      - ./init-extensions.sql:/docker-entrypoint-initdb.d/init-extensions.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 30s
