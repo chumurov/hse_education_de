@@ -1,0 +1,12 @@
+[project]
+name = "dz-1"
+version = "0.1.0"
+description = "Домашнее задание №1"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "ipykernel>=7.1.0",
+    "matplotlib>=3.10.7",
+    "pip>=25.3",
+    "wordcloud>=1.9.4",
+]
