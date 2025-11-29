@@ -1,85 +1,169 @@
-# Локальная MongoDB (локальное развёртывание через Docker)
+# Отчет по проектированию базы данных MongoDB для системы учета оценок
 
-Это минимальная конфигурация для запуска MongoDB локально в контейнере Docker и примеры подключения.
+## 1. Введение
 
-## Что добавлено
+Данный отчет описывает структуру и реализацию базы данных MongoDB для системы управления успеваемостью студентов. Система предназначена для хранения информации о студентах, преподавателях, учебных курсах и оценках.
 
-- `docker-compose.yml` — служба `mongodb` с монтированными томами и healthcheck.
-- `mongo-init/init.js` — скрипт инициализации, создаёт пользователя приложения и опционально добавляет тестовые данные.
-- `scripts/` — удобные скрипты:
-  - `start.sh` — поднять контейнер (создаёт `.env`, если его нет)
-  - `stop.sh` — остановить контейнер
-  - `reset.sh` — сброс данных (удаляет `./data` и запускает контейнер заново)
-  - `connect.sh` — подключиться к MongoDB внутри контейнера с `mongosh`
+## 2. Схема и структура данных
 
-## Быстрый запуск
+База данных состоит из четырех основных коллекций: `students`, `teachers`, `courses` и `grades`. Ниже приведено подробное описание каждой коллекции.
 
-1) Убедитесь, что у вас установлен Docker (и docker compose в v2):
+### 2.1. Коллекция Students (Студенты)
 
-```bash
-docker --version
-docker compose version
+Хранит информацию о студентах университета.
+
+**Пример документа:**
+```json
+{
+  "_id": ObjectId("..."),
+  "studentId": "БО-2024-001",
+  "fullName": "Иванов Иван Иванович",
+  "email": "ivan@university.ru",
+  "phone": "+7-999-123-4567",
+  "program": "Информатика",
+  "course": 2,
+  "enrollmentDate": ISODate("2023-09-01"),
+  "status": "active",
+  "group": "БО-2-1"
+}
 ```
 
-2) Запустите MongoDB:
+**Поля:**
+- `studentId` (string): Уникальный идентификатор студента.
+- `fullName` (string): ФИО студента.
+- `email` (string): Контактный email.
+- `phone` (string): Контактный телефон.
+- `program` (string): Образовательная программа.
+- `course` (int): Текущий курс обучения (1-6).
+- `enrollmentDate` (date): Дата зачисления.
+- `status` (string): Статус обучения (active, inactive, graduated, expelled).
+- `group` (string): Учебная группа.
 
-```bash
-cd module_1/nosql
-./scripts/start.sh
-```
-
-3) Подключение:
-
-- Через `mongosh` внутри контейнера (подходит если у вас нет mongosh локально):
-
-```bash
-./scripts/connect.sh
-```
-
-- Локальный `mongosh` (если он у вас установлен):
-
-```bash
-# подключение к контейнеру через порт
-mongosh "mongodb://root:example@localhost:27017/admin"
-# подключение как app user к базе appdb:
-mongosh "mongodb://appuser:apppassword@localhost:27017/appdb"
-```
-
-4) Остановить контейнер:
-
-```bash
-./scripts/stop.sh
-```
-
-5) Сброс данных (удалит ./data):
-
-```bash
-./scripts/reset.sh
-```
-
-## Заполнение тестовыми данными
-
-Если вы хотите заполнить базу дополнительными тестовыми данными (несколько студентов, курсов и оценок), используйте seeder:
-
-```bash
-# Запустить только если MongoDB уже поднят:
-./scripts/seed.sh
-
-# Если хотите принудительно пересоздать данные (удалит и заново создаст коллекции):
-FORCE_SEED=true ./scripts/seed.sh
-```
-
-Скрипт `mongo-init/02_seed.js` вставит набор преподавателей, курсов, студентов и оценок и выведет итоговые счёты.
+**Индексы:**
+- `{ "studentId": 1 }` (Unique)
+- `{ "email": 1 }`
+- `{ "group": 1 }`
 
 ---
 
-## Типовые запросы и примеры вывода
+### 2.2. Коллекция Teachers (Преподаватели)
 
-Ниже приведены 10 типовых запросов для работы с этой схемой, короткое описание и пример вывода (до 5 строк). Используйте `mongosh` для запуска запросов или выполняйте через `docker exec nosql_mongo mongosh ...`.
+Хранит профили преподавательского состава.
 
-1) Посмотреть все оценки студента с названиями курсов
+**Пример документа:**
+```json
+{
+  "_id": ObjectId("..."),
+  "teacherId": "ПРЕ-2024-001",
+  "fullName": "Петров Петр Петрович",
+  "email": "petrov@university.ru",
+  "department": "Информатика",
+  "position": "Доцент",
+  "phone": "+7-999-987-6543",
+  "specialization": ["Базы данных", "Программирование"]
+}
+```
 
-Запрос:
+**Поля:**
+- `teacherId` (string): Уникальный идентификатор преподавателя.
+- `fullName` (string): ФИО.
+- `email` (string): Email.
+- `department` (string): Кафедра.
+- `position` (string): Должность.
+- `phone` (string): Телефон.
+- `specialization` (array of strings): Список специализаций.
+
+**Индексы:**
+- `{ "teacherId": 1 }` (Unique)
+- `{ "email": 1 }`
+
+---
+
+### 2.3. Коллекция Courses (Курсы)
+
+Содержит информацию об учебных дисциплинах.
+
+**Пример документа:**
+```json
+{
+  "_id": ObjectId("..."),
+  "courseCode": "BD-2024-001",
+  "courseName": "Базы данных",
+  "description": "Введение в СУБД",
+  "department": "Информатика",
+  "credits": 3,
+  "semester": 4,
+  "hours": 48,
+  "teacherId": ObjectId("..."),
+  "startDate": ISODate("2024-09-01"),
+  "endDate": ISODate("2024-12-15"),
+  "maxStudents": 30
+}
+```
+
+**Поля:**
+- `courseCode` (string): Код курса.
+- `courseName` (string): Название.
+- `description` (string): Описание.
+- `department` (string): Кафедра.
+- `credits` (int): Кредиты ECTS.
+- `semester` (int): Семестр.
+- `hours` (int): Часы.
+- `teacherId` (ObjectId): Ссылка на преподавателя.
+- `startDate`, `endDate` (date): Даты проведения.
+- `maxStudents` (int): Лимит студентов.
+
+**Индексы:**
+- `{ "courseCode": 1 }` (Unique)
+- `{ "semester": 1 }`
+- `{ "teacherId": 1 }`
+
+---
+
+### 2.4. Коллекция Grades (Оценки)
+
+Журнал успеваемости.
+
+**Пример документа:**
+```json
+{
+  "_id": ObjectId("..."),
+  "studentId": ObjectId("..."),
+  "courseId": ObjectId("..."),
+  "grade": 4.5,
+  "gradeType": "экзамен",
+  "gradeDate": ISODate("2024-12-15"),
+  "notes": "Комментарий",
+  "status": "final",
+  "teacher": ObjectId("...")
+}
+```
+
+**Поля:**
+- `studentId` (ObjectId): Ссылка на студента.
+- `courseId` (ObjectId): Ссылка на курс.
+- `grade` (double/int): Оценка.
+- `gradeType` (string): Тип (экзамен, зачет и т.д.).
+- `gradeDate` (date): Дата.
+- `notes` (string): Примечания.
+- `status` (string): Статус оценки (draft, final).
+- `teacher` (ObjectId): Кто выставил.
+
+**Индексы:**
+- `{ "studentId": 1 }`
+- `{ "courseId": 1 }`
+- `{ "studentId": 1, "courseId": 1 }` (Unique - одна оценка за курс, опционально)
+- `{ "gradeDate": 1 }`
+
+---
+
+## 3. Типовые запросы и примеры вывода
+
+Ниже приведены примеры запросов, реализованных для данной схемы, с образцами вывода.
+
+### 1) Посмотреть все оценки студента с названиями курсов
+
+**Запрос:**
 ```javascript
 // заменить STUDENT_OBJECT_ID на ObjectId студента
 const sid = ObjectId('692ad9e9518463d588ce5f54');
@@ -93,7 +177,7 @@ db.getSiblingDB('appdb').grades.aggregate([
 ])
 ```
 
-Пример вывода (5 строк):
+**Пример вывода:**
 ```
 { _id: ObjectId('...'), grade: 1.3, gradeType: 'контрольная', gradeDate: ISODate('...'), courseName: 'Курс 8 (COURSE-2025-008)' }
 { _id: ObjectId('...'), grade: 4.4, gradeType: 'экзамен', gradeDate: ISODate('...'), courseName: 'Курс 4 (COURSE-2025-004)' }
@@ -101,9 +185,9 @@ db.getSiblingDB('appdb').grades.aggregate([
 { _id: ObjectId('...'), grade: 3.3, gradeType: 'зачёт', gradeDate: ISODate('...'), courseName: 'Курс 3 (COURSE-2025-003)' }
 ```
 
-2) Средняя оценка студента (финальные оценки)
+### 2) Средняя оценка студента (финальные оценки)
 
-Запрос:
+**Запрос:**
 ```javascript
 const sid = ObjectId('692ad9e9518463d588ce5f54');
 db.getSiblingDB('appdb').grades.aggregate([
@@ -112,14 +196,14 @@ db.getSiblingDB('appdb').grades.aggregate([
 ])
 ```
 
-Пример вывода:
+**Пример вывода:**
 ```
 { _id: ObjectId('...'), avgGrade: 3.0666666666666664, courses: 3 }
 ```
 
-3) Все студенты по курсу преподавателя с их оценками (для преподавателя)
+### 3) Все студенты по курсу преподавателя с их оценками
 
-Запрос:
+**Запрос:**
 ```javascript
 const tid = ObjectId('692ad9e9518463d588ce5f47');
 db.getSiblingDB('appdb').courses.aggregate([
@@ -133,18 +217,15 @@ db.getSiblingDB('appdb').courses.aggregate([
 ])
 ```
 
-Пример вывода:
+**Пример вывода:**
 ```
 { _id: ObjectId('...'), courseCode: 'COURSE-2025-001', courseName: 'Курс 1 (COURSE-2025-001)', grades: { grade: 4.2 }, student: { studentId: 'STU-2024-002', fullName: 'Петров Иван Андреевич' } }
 { _id: ObjectId('...'), courseCode: 'COURSE-2025-001', courseName: 'Курс 1 (COURSE-2025-001)', grades: { grade: 1.5 }, student: { studentId: 'STU-2024-009', fullName: 'Новикова Наталья Петрович' } }
-{ _id: ObjectId('...'), courseCode: 'COURSE-2025-001', courseName: 'Курс 1 (COURSE-2025-001)', grades: { grade: 2.4 }, student: { studentId: 'STU-2024-010', fullName: 'Смирнов Елена Ивановна' } }
-{ _id: ObjectId('...'), courseCode: 'COURSE-2025-001', courseName: 'Курс 1 (COURSE-2025-001)', grades: { grade: 1.9 }, student: { studentId: 'STU-2024-011', fullName: 'Леонова Андрей Андреевич' } }
-{ _id: ObjectId('...'), courseCode: 'COURSE-2025-001', courseName: 'Курс 1 (COURSE-2025-001)', grades: { grade: 4.7 }, student: { studentId: 'STU-2024-013', fullName: 'Новикова Сергей Петрович' } }
 ```
 
-4) Рейтинг (топ) студентов по курсу
+### 4) Рейтинг (топ) студентов по курсу
 
-Запрос:
+**Запрос:**
 ```javascript
 const cid = ObjectId('692ad9e9518463d588ce5f4c');
 db.getSiblingDB('appdb').grades.aggregate([
@@ -158,18 +239,15 @@ db.getSiblingDB('appdb').grades.aggregate([
 ])
 ```
 
-Пример вывода:
+**Пример вывода:**
 ```
 { _id: ObjectId('...'), avgGrade: 4.8, studentId: 'STU-2024-049', studentName: 'Кузнецов Наталья Иванович' }
 { _id: ObjectId('...'), avgGrade: 4.7, studentId: 'STU-2024-034', studentName: 'Кузнецов Иван Петровна' }
-{ _id: ObjectId('...'), avgGrade: 4.7, studentId: 'STU-2024-013', studentName: 'Новикова Сергей Петрович' }
-{ _id: ObjectId('...'), avgGrade: 4.4, studentId: 'STU-2024-027', studentName: 'Попова Мария Андреевич' }
-{ _id: ObjectId('...'), avgGrade: 4.2, studentId: 'STU-2024-002', studentName: 'Петров Иван Андреевич' }
 ```
 
-5) Топ студентов по средней оценке по всем курсам
+### 5) Топ студентов по средней оценке по всем курсам
 
-Запрос:
+**Запрос:**
 ```javascript
 db.getSiblingDB('appdb').grades.aggregate([
   { $match: { status: 'final' } },
@@ -182,18 +260,15 @@ db.getSiblingDB('appdb').grades.aggregate([
 ])
 ```
 
-Пример вывода:
+**Пример вывода:**
 ```
 { _id: ObjectId('...'), avgGrade: 4.8, studentId: 'STU-2024-015', studentName: 'Новикова Иван Алексеевич' }
 { _id: ObjectId('...'), avgGrade: 4.6, studentId: 'STU-2024-036', studentName: 'Кузнецов Ольга Сергеевич' }
-{ _id: ObjectId('...'), avgGrade: 4.5, studentId: 'STU-2024-049', studentName: 'Кузнецов Наталья Иванович' }
-{ _id: ObjectId('...'), avgGrade: 4.35, studentId: 'STU-2024-016', studentName: 'Петров Мария Петрович' }
-{ _id: ObjectId('...'), avgGrade: 4.35, studentId: 'STU-2024-022', studentName: 'Петров Елена Алексеевич' }
 ```
 
-6) Студенты с низкой средней (на пересдачи / в академическом риске)
+### 6) Студенты с низкой средней (академический риск)
 
-Запрос:
+**Запрос:**
 ```javascript
 db.getSiblingDB('appdb').grades.aggregate([
   { $match: { status: 'final' } },
@@ -206,18 +281,15 @@ db.getSiblingDB('appdb').grades.aggregate([
 ])
 ```
 
-Пример вывода:
+**Пример вывода:**
 ```
 { _id: ObjectId('...'), avgGrade: 2.1, studentId: 'STU-2024-023', studentName: 'Волкова Петр Петровна' }
 { _id: ObjectId('...'), avgGrade: 2, studentId: 'STU-2024-042', studentName: 'Кузнецов Ольга Алексеевич' }
-{ _id: ObjectId('...'), avgGrade: 2.4667, studentId: 'STU-2024-009', studentName: 'Новикова Наталья Петрович' }
-{ _id: ObjectId('...'), avgGrade: 1.2, studentId: 'STU-2024-005', studentName: 'Сидоров Алексей Сергеевич' }
-{ _id: ObjectId('...'), avgGrade: 2.4, studentId: 'STU-2024-038', studentName: 'Кузнецов Ольга Андреевич' }
 ```
 
-7) Распределение оценок по курсу (bucket по целой части оценки)
+### 7) Распределение оценок по курсу
 
-Запрос:
+**Запрос:**
 ```javascript
 const cid = ObjectId('692ad9e9518463d588ce5f4c');
 db.getSiblingDB('appdb').grades.aggregate([
@@ -228,7 +300,7 @@ db.getSiblingDB('appdb').grades.aggregate([
 ])
 ```
 
-Пример вывода:
+**Пример вывода:**
 ```
 { _id: 4, count: 5 }
 { _id: 3, count: 5 }
@@ -236,9 +308,9 @@ db.getSiblingDB('appdb').grades.aggregate([
 { _id: 1, count: 3 }
 ```
 
-8) Курсы преподавателя и число зачисленных студентов
+### 8) Курсы преподавателя и число зачисленных студентов
 
-Запрос:
+**Запрос:**
 ```javascript
 const tid = ObjectId('692ad9e9518463d588ce5f47');
 db.getSiblingDB('appdb').courses.aggregate([
@@ -249,15 +321,15 @@ db.getSiblingDB('appdb').courses.aggregate([
 ])
 ```
 
-Пример вывода:
+**Пример вывода:**
 ```
 { _id: ObjectId('...'), courseCode: 'COURSE-2025-001', courseName: 'Курс 1 (COURSE-2025-001)', enrolled: 1 }
 { _id: ObjectId('...'), courseCode: 'COURSE-2025-006', courseName: 'Курс 6 (COURSE-2025-006)', enrolled: 1 }
 ```
 
-9) Число активных студентов по группам
+### 9) Число активных студентов по группам
 
-Запрос:
+**Запрос:**
 ```javascript
 db.getSiblingDB('appdb').students.aggregate([
   { $match: { status: 'active' } },
@@ -267,7 +339,7 @@ db.getSiblingDB('appdb').students.aggregate([
 ])
 ```
 
-Пример вывода:
+**Пример вывода:**
 ```
 { _id: 'БО-2-2', count: 10 }
 { _id: 'БО-1-2', count: 10 }
@@ -276,9 +348,9 @@ db.getSiblingDB('appdb').students.aggregate([
 { _id: 'БО-2-1', count: 10 }
 ```
 
-10) Новые оценки за последние 7 дней (мониторинг)
+### 10) Новые оценки за последние 7 дней (мониторинг)
 
-Запрос:
+**Запрос:**
 ```javascript
 const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 db.getSiblingDB('appdb').grades.aggregate([
@@ -293,26 +365,8 @@ db.getSiblingDB('appdb').grades.aggregate([
 ])
 ```
 
-Пример вывода:
+**Пример вывода:**
 ```
 { _id: ObjectId('...'), grade: 3, gradeType: 'экзамен', gradeDate: ISODate('...'), studentId: 'STU-2024-050', studentName: 'Леонова Иван Сергеевич', courseName: 'Курс 6 (COURSE-2025-006)' }
 { _id: ObjectId('...'), grade: 3, gradeType: 'зачёт', gradeDate: ISODate('...'), studentId: 'STU-2024-050', studentName: 'Леонова Иван Сергеевич', courseName: 'Курс 7 (COURSE-2025-007)' }
-{ _id: ObjectId('...'), grade: 3.8, gradeType: 'экзамен', gradeDate: ISODate('...'), studentId: 'STU-2024-050', studentName: 'Леонова Иван Сергеевич', courseName: 'Курс 4 (COURSE-2025-004)' }
-{ _id: ObjectId('...'), grade: 4.8, gradeType: 'контрольная', gradeDate: ISODate('...'), studentId: 'STU-2024-049', studentName: 'Кузнецов Наталья Иванович', courseName: 'Курс 1 (COURSE-2025-001)' }
-{ _id: ObjectId('...'), grade: 4.2, gradeType: 'экзамен', gradeDate: ISODate('...'), studentId: 'STU-2024-049', studentName: 'Кузнецов Наталья Иванович', courseName: 'Курс 7 (COURSE-2025-007)' }
 ```
-
----
-
-Эти примеры можно адаптировать под ваши реальные Id/поля, добавить фильтры по семестру, кафедре или типу оценки и т.д. Если хотите, могу добавить версии запроса в виде коротких shell-команд для запуска в `mongosh` или через `docker exec`.
-
-
-## Примечания безопасности
-
-- Данные в `.env` хранятся в корне репозитория для удобства разработки — **не храните** реальные пароли в этом файле при публикации в Git.
-- Для production используйте секреты Docker или внешние менеджеры секретов.
-
-## Дополнительно
-
-- Для создания дополнительного набора данных можно расширить `mongo-init/init.js`.
-- Если вы используете MongoDB в приложении, добавьте строку подключения в переменные среды вашего приложения, например `MONGO_URI=mongodb://appuser:apppassword@localhost:27017/appdb`.
