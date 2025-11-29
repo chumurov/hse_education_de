@@ -1,0 +1,5 @@
+# Ignore data directory and local env files
+data/
+.env
+node_modules/
+.DS_Store
