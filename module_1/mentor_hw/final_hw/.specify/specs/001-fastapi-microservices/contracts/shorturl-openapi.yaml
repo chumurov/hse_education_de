@@ -1,0 +1,71 @@
+openapi: 3.0.0
+info:
+  title: ShortURL Service API
+  version: 1.0.0
+paths:
+  /shorten:
+    post:
+      summary: Shorten a URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  format: uri
+              required:
+                - url
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  short_id:
+                    type: string
+                  short_url:
+                    type: string
+  /{short_id}:
+    get:
+      summary: Redirect to full URL
+      parameters:
+        - name: short_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '307':
+          description: Temporary Redirect
+        '404':
+          description: Not Found
+  /stats/{short_id}:
+    get:
+      summary: Get URL stats
+      parameters:
+        - name: short_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  short_id:
+                    type: string
+                  full_url:
+                    type: string
+                  clicks:
+                    type: integer
+        '404':
+          description: Not Found
