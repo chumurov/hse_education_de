@@ -208,4 +208,4 @@ __marimo__/
 
 
 # uv
-uv.lock
+uv.lock**/app_logs.jsonl
