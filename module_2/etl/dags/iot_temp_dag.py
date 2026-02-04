@@ -165,8 +165,99 @@ def iot_data_dag():
         conn.close()
         print("Аналитические таблицы успешно созданы.")
 
+    @task
+    def create_analytical_tables_last_10_days():
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        cur.execute("DROP TABLE IF EXISTS iot_temp_min_max_avg_last_10_days;")
+        cur.execute("""
+            CREATE TABLE iot_temp_min_max_avg_last_10_days AS
+            WITH max_date AS (
+                SELECT MAX(noted_date) AS max_date
+                FROM iot_temp_data
+            ),
+            base AS (
+                SELECT *
+                FROM iot_temp_data
+                WHERE noted_date >= (SELECT max_date - INTERVAL '10 days' FROM max_date)
+            )
+            SELECT *
+            FROM (
+                SELECT CAST(noted_date AS DATE) noted_date, AVG(temp) avg_temp, 'max' as type
+                FROM base
+                GROUP BY CAST(noted_date AS DATE)
+                ORDER BY AVG(temp) DESC
+                LIMIT 5
+            ) t
+            UNION ALL
+            SELECT *
+            FROM (
+                SELECT CAST(noted_date AS DATE) noted_date, AVG(temp) avg_temp, 'min' as type
+                FROM base
+                GROUP BY CAST(noted_date AS DATE)
+                ORDER BY AVG(temp) ASC
+                LIMIT 1
+            ) t;
+        """)
+
+        cur.execute("DROP TABLE IF EXISTS iot_temp_indoor_last_10_days;")
+        cur.execute("""
+            CREATE TABLE iot_temp_indoor_last_10_days AS
+            WITH max_date AS (
+                SELECT MAX(noted_date) AS max_date
+                FROM iot_temp_data
+            )
+            SELECT *
+            FROM iot_temp_data
+            WHERE out_in = 'In'
+              AND noted_date >= (SELECT max_date - INTERVAL '10 days' FROM max_date);
+        """)
+
+        cur.execute("DROP TABLE IF EXISTS iot_temp_by_date_last_10_days;")
+        cur.execute("""
+            CREATE TABLE iot_temp_by_date_last_10_days AS
+            WITH max_date AS (
+                SELECT MAX(noted_date) AS max_date
+                FROM iot_temp_data
+            )
+            SELECT id, room_id, CAST(noted_date AS DATE) noted_date, "temp", out_in
+            FROM iot_temp_data
+            WHERE noted_date >= (SELECT max_date - INTERVAL '10 days' FROM max_date);
+        """)
+
+        cur.execute("DROP TABLE IF EXISTS iot_temp_filtered_last_10_days;")
+        cur.execute("""
+            CREATE TABLE iot_temp_filtered_last_10_days AS
+            WITH max_date AS (
+                SELECT MAX(noted_date) AS max_date
+                FROM iot_temp_data
+            ),
+            base AS (
+                SELECT *
+                FROM iot_temp_data
+                WHERE noted_date >= (SELECT max_date - INTERVAL '10 days' FROM max_date)
+            ),
+            bounds AS (
+                SELECT
+                    percentile_cont(0.05) WITHIN GROUP (ORDER BY temp) AS p05,
+                    percentile_cont(0.95) WITHIN GROUP (ORDER BY temp) AS p95
+                FROM base
+            )
+            SELECT t.*
+            FROM base t
+            CROSS JOIN bounds b
+            WHERE t.temp >= b.p05
+              AND t.temp <= b.p95;
+        """)
+
+        conn.commit()
+        cur.close()
+        conn.close()
+        print("Аналитические таблицы за последние 10 дней успешно созданы.")
+
     # Определение последовательности
-    create_iot_table() >> load_iot_data() >> create_analytical_tables()
+    create_iot_table() >> load_iot_data() >> create_analytical_tables() >> create_analytical_tables_last_10_days()
 
 # Регистрация DAG
 iot_temp_dag = iot_data_dag()

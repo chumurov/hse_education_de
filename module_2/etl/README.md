@@ -43,4 +43,12 @@
 
 <img src="./screenshot/dz2_5-95.png" width="500" alt="Скрин">
 
+# Отчет о выполнении дз 3 по ETL
 
+Я добавил новую таску в даг dags/iot_temp_dag.py
+
+reate_analytical_tables_last_10_days()
+
+вот результат созданные таблицы
+
+<img src="./screenshot/dz_3.png" width="500" alt="Скрин">

@@ -60,7 +60,8 @@ def ingestion_dag():
                 name VARCHAR(255),
                 species VARCHAR(255),
                 birth_year INT,
-                photo TEXT
+                photo TEXT,
+                fav_foods TEXT[]
             );
         """)
         
@@ -108,13 +109,14 @@ def ingestion_dag():
                 pet.get('name'),
                 pet.get('species'),
                 pet.get('birthYear'),
-                pet.get('photo')
+                pet.get('photo'),
+                pet.get('favFoods')
             ))
             
         conn = get_db_connection()
         cur = conn.cursor()
         cur.executemany(
-            "INSERT INTO pets_data (name, species, birth_year, photo) VALUES (%s, %s, %s, %s)",
+            "INSERT INTO pets_data (name, species, birth_year, photo, fav_foods) VALUES (%s, %s, %s, %s, %s)",
             pets
         )
         conn.commit()
