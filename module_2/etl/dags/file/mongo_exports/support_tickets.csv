@@ -1,0 +1,3 @@
+ticket_id,user_id,status,issue_type,messages,created_at,updated_at
+ticket_789,user_123,open,payment,"[{""sender"": ""user"", ""message"": ""Не могу оплатить заказ."", ""timestamp"": ""2024-01-09T12:00:00""}, {""sender"": ""support"", ""message"": ""Пожалуйста, уточните способ оплаты."", ""timestamp"": ""2024-01-09T13:00:00""}]",2024-01-09T11:55:00,2024-01-09T13:00:00
+ticket_790,user_456,closed,delivery,"[{""sender"": ""user"", ""message"": ""Где мой заказ?"", ""timestamp"": ""2024-01-08T09:10:00""}, {""sender"": ""support"", ""message"": ""Заказ уже передан в службу доставки."", ""timestamp"": ""2024-01-08T09:25:00""}]",2024-01-08T09:05:00,2024-01-08T09:25:00

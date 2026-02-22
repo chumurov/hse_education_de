@@ -1,0 +1,3 @@
+review_id,user_id,product_id,review_text,rating,moderation_status,flags,submitted_at
+rev_555,user_123,prod_101,"Отличный товар, работает как нужно!",5,pending,"[""contains_images""]",2024-01-08T10:20:00
+rev_556,user_789,prod_205,"Пришел с задержкой, но качество нормальное.",4,in_review,"[""delivery_complaint""]",2024-01-08T11:45:00

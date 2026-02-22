@@ -50,5 +50,59 @@
 reate_analytical_tables_last_10_days()
 
 вот результат созданные таблицы
-
+raw>stg>mart слой
 <img src="./screenshot/dz_3.png" width="500" alt="Скрин">
+
+
+# Итоговое задание модуль 3
+
+Даг 
+dags/mongodb_csv_postgres_marts_dag.py
+Отработал 
+<img src="./screenshot/dz_itog_dag.png" width="500" alt="Скрин">
+
+
+Все таблицы в postgresql
+
+<img src="./screenshot/dz_itog_all_table.png" width="500" alt="Скрин">
+
+
+
+Итоговые аналитические таблицы
+
+<img src="./screenshot/dz_itog_mart_2.png" width="500" alt="Скрин">
+
+1. `mongo_etl.mart_user_activity_daily` (активность пользователей по дням)
+- `user_id` — идентификатор пользователя
+- `activity_date` — дата активности
+- `sessions_cnt` — количество сессий пользователя за день
+- `avg_session_minutes` — средняя длительность сессии (в минутах)
+- `pages_visited_total` — суммарное количество посещённых страниц
+- `actions_total` — суммарное количество действий пользователя
+- `tickets_created_cnt` — количество созданных обращений в поддержку
+- `tickets_open_cnt` — количество обращений со статусом `open`
+- `recommended_products_cnt` — количество рекомендованных пользователю товаров
+
+Источники: `stg_user_sessions`, `stg_support_tickets`, `stg_user_recommendations`.
+
+
+
+<img src="./screenshot/dz_itog_mart_1.png" width="500" alt="Скрин">
+
+2. `mongo_etl.mart_product_quality` (метрики качества и модерации по товарам)
+- `product_id` — идентификатор товара
+- `reviews_total` — общее количество отзывов
+- `avg_rating` — средний рейтинг
+- `pending_reviews_cnt` — количество отзывов со статусом модерации `pending`
+- `reviews_with_images_cnt` — количество отзывов с флагом `contains_images`
+- `recommended_users_cnt` — количество пользователей, которым рекомендован товар
+- `first_review_date` — дата первого отзыва
+- `last_review_date` — дата последнего отзыва
+
+Источники: `stg_moderation_queue`, `stg_user_recommendations`.
+
+
+
+
+
+

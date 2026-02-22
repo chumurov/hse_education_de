@@ -14,7 +14,8 @@ x-airflow-common:
     AIRFLOW__API_AUTH__JWT_SECRET: 'fixed_secret_key_for_airflow_3'
     AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
     AIRFLOW__FAB__AUTH_ROLE_PUBLIC: Admin
-    _PIP_ADDITIONAL_REQUIREMENTS: apache-airflow-providers-fab python-dotenv psycopg2-binary
+    _PIP_ADDITIONAL_REQUIREMENTS: apache-airflow-providers-fab python-dotenv psycopg2-binary /opt/airflow/dags/wheels/cp312/dnspython-2.8.0-py3-none-any.whl /opt/airflow/dags/wheels/cp312/pymongo-4.16.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+    PIP_DEFAULT_TIMEOUT: 100
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.providers.fab.auth_manager.api.auth.backend.session,airflow.api.auth.backend.session'
   volumes:
     - ./dags:/opt/airflow/dags

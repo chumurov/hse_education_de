@@ -71,23 +71,79 @@ fn is_symmetric(matrix: &[Vec<i32>]) -> bool {
     }
     true
 }
+// В метании молота состязается 
+// n спортcменов. Каждый из них сделал 
+// m бросков. Побеждает спортсмен, у которого максимален наилучший бросок. 
+// Если таких несколько, то из них побеждает тот, у которого наилучшая сумма результатов по всем попыткам. 
+// Если и таких несколько, победителем считается спортсмен с минимальным номером. 
+// Определите номер победителя соревнований.
+fn find_winner(throws: &Vec<Vec<i32>>) -> usize {
+    let n = throws.len();
+    let m = throws[0].len();
+    let mut best_throw = vec![0; n];
+    let mut total_score = vec![0; n];
+    for i in 0..n { 
+        for j in 0..m {
+            if throws[i][j] > best_throw[i] {
+                best_throw[i] = throws[i][j];
+            }
+            total_score[i] += throws[i][j];
+        }
+    }
+    let mut winner = 0;
+    for i in 1..n {
+        if best_throw[i] > best_throw[winner] ||
+           (best_throw[i] == best_throw[winner] && total_score[i] > total_score[winner]) {
+            winner = i; 
+    
+           }
 
+    }
+    winner
+}
+
+fn palindrome_check(s: &str) -> bool {
+    let chars: Vec<char> = s.chars().collect();
+    let len = chars.len();
+    for i in 0..len / 2 {
+        if chars[i] != chars[len - 1 - i] {
+            return false;
+        }
+    }
+    true
+}
+
+
+fn max_change_last(s: &mut Vec<i32>) {
+    let max_idx = s
+    .iter()
+    .enumerate()
+    .max_by_key(|(_, v)| *v)
+    .map(|(i, _)| i)
+    .unwrap();
+
+    let last = s.len() -   1;
+
+    s.swap(max_idx, last);
+    
+    
+
+
+    
+
+
+}
 
 
 fn main() {
     
   
 
-    //0 1 2
-    //1 5 3
-    //2 3 4
-    let matrix = vec![
-        vec![0, 1, 2],
-        vec![1, 5, 3],
-        vec![2, 3, 4],
-    ];
-    let symmetric = is_symmetric(&matrix);
-    println!("{:?}", symmetric);
+// 1 5 2 4 3
+
+    let mut lst = vec![1, 5, 2, 4, 3];
+    max_change_last(&mut lst);
+    println!("{:?}", lst);
 
     
 }
