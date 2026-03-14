@@ -1,0 +1,10 @@
+# Ignore data directory and local env files
+data/
+benchmark_results/
+.venv/
+.pytest_cache/
+__pycache__/
+.python-version
+.env
+node_modules/
+.DS_Store

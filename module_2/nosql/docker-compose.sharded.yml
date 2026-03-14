@@ -1,0 +1,101 @@
+services:
+  cfg1:
+    image: mongo:6.0
+    container_name: nosql_cfg1
+    command: ["mongod", "--configsvr", "--replSet", "cfgRS", "--bind_ip_all", "--port", "27019"]
+    volumes:
+      - cfg1_data:/data/db
+      - ./mongo-sharded:/scripts:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --port 27019 --eval 'db.adminCommand(\"ping\")'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  cfg2:
+    image: mongo:6.0
+    container_name: nosql_cfg2
+    command: ["mongod", "--configsvr", "--replSet", "cfgRS", "--bind_ip_all", "--port", "27019"]
+    volumes:
+      - cfg2_data:/data/db
+      - ./mongo-sharded:/scripts:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --port 27019 --eval 'db.adminCommand(\"ping\")'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  cfg3:
+    image: mongo:6.0
+    container_name: nosql_cfg3
+    command: ["mongod", "--configsvr", "--replSet", "cfgRS", "--bind_ip_all", "--port", "27019"]
+    volumes:
+      - cfg3_data:/data/db
+      - ./mongo-sharded:/scripts:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --port 27019 --eval 'db.adminCommand(\"ping\")'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  shard1:
+    image: mongo:6.0
+    container_name: nosql_shard1
+    command: ["mongod", "--shardsvr", "--replSet", "shard1RS", "--bind_ip_all", "--port", "27018"]
+    volumes:
+      - shard1_data:/data/db
+      - ./mongo-sharded:/scripts:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --port 27018 --eval 'db.adminCommand(\"ping\")'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  shard2:
+    image: mongo:6.0
+    container_name: nosql_shard2
+    command: ["mongod", "--shardsvr", "--replSet", "shard2RS", "--bind_ip_all", "--port", "27018"]
+    volumes:
+      - shard2_data:/data/db
+      - ./mongo-sharded:/scripts:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --port 27018 --eval 'db.adminCommand(\"ping\")'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  mongos:
+    image: mongo:6.0
+    container_name: nosql_mongos
+    command:
+      [
+        "mongos",
+        "--configdb",
+        "cfgRS/cfg1:27019,cfg2:27019,cfg3:27019",
+        "--bind_ip_all",
+        "--port",
+        "27017"
+      ]
+    depends_on:
+      - cfg1
+      - cfg2
+      - cfg3
+      - shard1
+      - shard2
+    volumes:
+      - ./mongo-sharded:/scripts:ro
+      - ./mongo-init:/init-scripts:ro
+    ports:
+      - "27018:27017"
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --port 27017 --eval 'db.adminCommand(\"ping\")'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  cfg1_data:
+  cfg2_data:
+  cfg3_data:
+  shard1_data:
+  shard2_data:
