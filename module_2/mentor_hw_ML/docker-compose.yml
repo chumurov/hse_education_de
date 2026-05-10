@@ -1,0 +1,274 @@
+x-airflow-common:
+  &airflow-common
+  image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:latest}
+  environment:
+    &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+    AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__API__BASE_URL: http://airflow-api-server:8080
+    AIRFLOW__API__SECRET_KEY: 'fixed_secret_key_for_airflow_3'
+    AIRFLOW__API_AUTH__JWT_SECRET: 'fixed_secret_key_for_airflow_3'
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+    AIRFLOW__FAB__AUTH_ROLE_PUBLIC: Admin
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.providers.fab.auth_manager.api.auth.backend.session,airflow.api.auth.backend.session'
+    _PIP_ADDITIONAL_REQUIREMENTS: apache-airflow-providers-fab python-dotenv psycopg2-binary pandas pyarrow boto3 scikit-learn
+    PIP_DEFAULT_TIMEOUT: 100
+  volumes:
+    - ./airflow_dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+    - ./config:/opt/airflow/config
+    - ./ddl:/opt/airflow/ddl:ro
+    - ./Файлы к ML:/opt/airflow/ml_seed_sql:ro
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on:
+    &airflow-common-depends-on
+    redis:
+      condition: service_healthy
+    postgres:
+      condition: service_healthy
+
+services:
+  airflow-permissions:
+    image: alpine:latest
+    container_name: airflow-permissions
+    command: >
+      /bin/sh -c "mkdir -p /opt/airflow/dags /opt/airflow/logs/dag_processor &&
+      chmod -R 777 /opt/airflow/dags /opt/airflow/logs"
+    volumes:
+      - ./airflow_dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+    restart: "no"
+
+  postgres:
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+    container_name: postgres_final_pg
+    restart: unless-stopped
+    command: >
+      postgres
+      -c shared_preload_libraries=pg_stat_statements,pg_parquet
+      -c pg_stat_statements.track=all
+      -c pg_stat_statements.max=10000
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./data:/data:ro
+      - ./init-extensions.sql:/docker-entrypoint-initdb.d/init-extensions.sql
+      - ./init-airflow.sql:/docker-entrypoint-initdb.d/init-airflow.sql
+      - ./init-superset.sql:/docker-entrypoint-initdb.d/init-superset.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:latest
+    restart: always
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 30s
+      retries: 50
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: minio-init
+    depends_on:
+      minio:
+        condition: service_started
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+      MINIO_BUCKET: mentor-hw
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do
+          echo "Waiting for MinIO..."
+          sleep 2
+        done
+        mc mb --ignore-existing "local/$$MINIO_BUCKET"
+        mc anonymous set download "local/$$MINIO_BUCKET"
+    restart: "no"
+
+  superset-init:
+    build:
+      context: .
+      dockerfile: Dockerfile.superset
+    container_name: superset-init
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PYTHONPATH: /app/pythonpath
+      SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
+      SUPERSET_SECRET_KEY: fixed_secret_key_for_superset_3
+      SUPERSET_SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://superset:superset@postgres/superset
+      SUPERSET_ADMIN_USERNAME: admin
+      SUPERSET_ADMIN_PASSWORD: admin
+      SUPERSET_ADMIN_EMAIL: admin@admin.com
+      SUPERSET_ADMIN_FIRSTNAME: Superset
+      SUPERSET_ADMIN_LASTNAME: Admin
+    volumes:
+      - superset_home:/app/superset_home
+      - ./superset_config.py:/app/pythonpath/superset_config.py:ro
+    command: >
+      /bin/sh -c "
+      superset db upgrade &&
+      superset init &&
+      superset set_database_uri
+      --database_name postgres
+      --uri postgresql+psycopg2://postgres:postgres@postgres:5432/postgres &&
+      superset fab create-admin
+      --username \"$${SUPERSET_ADMIN_USERNAME}\"
+      --firstname \"$${SUPERSET_ADMIN_FIRSTNAME}\"
+      --lastname \"$${SUPERSET_ADMIN_LASTNAME}\"
+      --email \"$${SUPERSET_ADMIN_EMAIL}\"
+      --password \"$${SUPERSET_ADMIN_PASSWORD}\" || true
+      "
+    restart: "no"
+
+  superset:
+    build:
+      context: .
+      dockerfile: Dockerfile.superset
+    container_name: superset
+    depends_on:
+      postgres:
+        condition: service_healthy
+      superset-init:
+        condition: service_completed_successfully
+    environment:
+      PYTHONPATH: /app/pythonpath
+      SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
+      SUPERSET_SECRET_KEY: fixed_secret_key_for_superset_3
+      SUPERSET_SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://superset:superset@postgres/superset
+    ports:
+      - "8088:8088"
+    volumes:
+      - superset_home:/app/superset_home
+      - ./superset_config.py:/app/pythonpath/superset_config.py:ro
+    command: ["gunicorn", "--bind", "0.0.0.0:8088", "--workers", "2", "--threads", "4", "--timeout", "120", "superset.app:create_app()"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8088/health >/dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  airflow-api-server:
+    <<: *airflow-common
+    command: api-server
+    environment:
+      <<: *airflow-common-env
+      AIRFLOW__API__BASE_URL: http://localhost:8080
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-permissions:
+        condition: service_completed_successfully
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-permissions:
+        condition: service_completed_successfully
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    command: dag-processor
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-permissions:
+        condition: service_completed_successfully
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-worker:
+    <<: *airflow-common
+    command: celery worker
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-permissions:
+        condition: service_completed_successfully
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-triggerer:
+    <<: *airflow-common
+    command: triggerer
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-permissions:
+        condition: service_completed_successfully
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-init:
+    <<: *airflow-common
+    command: version
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_MIGRATE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: airflow
+      _AIRFLOW_WWW_USER_PASSWORD: airflow
+    depends_on:
+      airflow-permissions:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  minio_data:
+  superset_home:

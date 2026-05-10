@@ -1,0 +1,238 @@
+# Отчет по выполненному домашнему заданию
+
+Короткая шпаргалка по доступам к сервисам и по таблицам в PostgreSQL.
+
+## Сервисы и логины
+
+### PostgreSQL
+- Хост с машины: `localhost:5435`
+- Хост внутри compose: `postgres:5432`
+- Пользователь: `postgres`
+- Пароль: `postgres`
+- База по умолчанию: `postgres`
+- Дополнительные базы и пользователи:
+  - `airflow` / `airflow`
+  - `superset` / `superset`
+
+### Airflow
+- URL: `http://localhost:8080`
+- Логин: `airflow`
+- Пароль: `airflow`
+- Режим: `CeleryExecutor`
+- Redis нужен как брокер очереди
+
+### Superset
+- URL: `http://localhost:8088`
+- Логин: `admin`
+- Пароль: `admin`
+- Метаданные Superset хранятся в PostgreSQL базе `superset`
+
+### MinIO
+- API URL: `http://localhost:9000`
+- Console URL: `http://localhost:9001`
+- Access key: `minioadmin`
+- Secret key: `minioadmin123`
+- Bucket: `mentor-hw`
+
+## Таблицы PostgreSQL
+
+### public.wells
+- `well_id` - идентификатор скважины, PK
+- `name` - имя/код скважины
+- `field_name` - название месторождения
+- `region` - регион добычи
+- `start_date` - дата запуска
+- `operator` - обслуживающая компания
+- `status` - статус работы (`active`, `suspended`, `maintenance`)
+
+### public.production
+- `prod_id` - идентификатор записи, PK
+- `well_id` - ссылка на `wells.well_id`, FK
+- `date` - дата
+- `oil_ton` - добыча нефти, тонн
+- `gas_m3` - добыча газа, м3
+- `water_m3` - добыча воды, м3
+- `energy_kwh` - энергопотребление
+- `downtime_hours` - часы простоя
+- `temperature` - температура
+- `pressure` - давление
+
+### public.well_telemetry
+- `record_id` - идентификатор записи, PK
+- `well_id` - ссылка на `wells.well_id`, FK
+- `timestamp` - время измерения
+- `pump_speed_rpm` - обороты насоса
+- `pump_current` - ток насоса
+- `pressure_in` - входное давление
+- `pressure_out` - выходное давление
+- `temperature` - температура
+- `vibration` - вибрация
+- `oil_flow_rate` - текущий дебит, тонн/час
+
+### public.well_targets
+- `well_id` - ссылка на `wells.well_id`, FK
+- `date` - дата
+- `daily_oil_ton` - целевой суточный дебит нефти
+
+### public.pumps
+- `pump_id` - идентификатор насоса, PK
+- `well_id` - ссылка на `wells.well_id`, FK
+- `type` - тип насоса
+- `install_date` - дата установки
+- `manufacturer` - производитель
+- `model` - модель
+
+### public.pump_sensors
+- `record_id` - идентификатор записи, PK
+- `pump_id` - ссылка на `pumps.pump_id`, FK
+- `timestamp` - время измерения
+- `temperature` - температура
+- `vibration` - вибрация
+- `current` - ток
+- `rpm` - обороты
+- `pressure` - давление
+
+### public.pump_failures
+- `failure_id` - идентификатор отказа, PK
+- `pump_id` - ссылка на `pumps.pump_id`, FK
+- `failure_date` - дата и время отказа
+- `failure_type` - тип отказа
+- `downtime_hours` - длительность простоя
+
+### public.deliveries
+- `delivery_id` - идентификатор доставки, PK
+- `date` - дата доставки
+- `source` - пункт отправления
+- `destination` - пункт назначения
+- `product_type` - тип продукта
+- `volume_ton` - объём груза, тонн
+- `cost_usd` - стоимость перевозки, USD
+- `delay_hours` - задержка, часы
+- `distance_km` - расстояние, км
+- `weather_conditions` - погодные условия
+- `driver_id` - ссылка на `drivers.driver_id`
+- `vehicle_id` - ссылка на `vehicles.vehicle_id`
+
+### public.drivers
+- `driver_id` - идентификатор водителя, PK
+- `name` - имя водителя
+- `experience_years` - стаж, лет
+- `region` - регион
+
+### public.vehicles
+- `vehicle_id` - идентификатор транспорта, PK
+- `plate_number` - госномер
+- `capacity_ton` - грузоподъёмность, тонн
+- `fuel_type` - тип топлива
+
+### public.oil_stations
+- `station_id` - идентификатор станции, PK
+- `station_name` - название станции
+- `latitude` - широта
+- `longitude` - долгота
+- `oil_flow_per_day` - суточный поток/производительность
+
+## Что создаёт DAG
+
+DAG `ml_postgres_s3_pipeline` чистит PostgreSQL и оставляет только широкие витрины, пригодные для Superset-запросов.
+
+### analytics
+- `production_dashboard` - скважина-день.
+  - `date` - дата замера/добычи; главный временной разрез для графиков тренда.
+  - `well_id` - идентификатор скважины; удобен для группировки и drill-down.
+  - `name` - человекочитаемое имя скважины; лучше использовать в подписях и таблицах.
+  - `field_name` - месторождение, к которому относится скважина.
+  - `region` - регион добычи; подходит для сравнения площадок.
+  - `status` - рабочий статус скважины на момент записи.
+  - `oil_ton` - суточная добыча нефти, основная метрика для большинства чартах.
+  - `gas_m3` - сопутствующая добыча газа.
+  - `water_m3` - объём добытой воды.
+  - `energy_kwh` - энергозатраты на добычу.
+  - `downtime_hours` - часы простоя за день; нужен для расчёта uptime и downtime share.
+  - `temperature` - технологическая температура на скважине.
+  - `pressure` - технологическое давление на скважине.
+
+- `logistics_dashboard` - доставка-строка.
+  - `delivery_id` - идентификатор доставки.
+  - `date` - дата доставки; базовый временной срез.
+  - `source` - точка отправления или база.
+  - `destination` - точка назначения.
+  - `product_type` - тип перевозимого продукта.
+  - `volume_ton` - объём груза в тоннах.
+  - `cost_usd` - стоимость доставки в долларах.
+  - `delay_hours` - задержка в часах; используйте для SLA и punctuality KPI.
+  - `distance_km` - длина маршрута в километрах.
+  - `distance_bucket` - укрупнённый диапазон расстояния для группировок в Superset.
+  - `weather_conditions` - погодные условия во время доставки.
+  - `driver_id` - идентификатор водителя.
+  - `driver_name` - имя водителя для группировки в отчетах.
+  - `experience_years` - стаж водителя, лет.
+  - `driver_region` - регион, где закреплён водитель.
+  - `vehicle_id` - идентификатор транспорта.
+  - `plate_number` - госномер машины.
+  - `capacity_ton` - грузоподъёмность транспорта.
+  - `vehicle_fuel_type` - тип топлива транспорта.
+  - `cost_per_km` - стоимость километра маршрута; удобна для сравнения эффективности.
+  - `late_flag` - признак опоздания, 1 если есть задержка, 0 если нет.
+
+### ml
+- `debit_dashboard` - скважина-день для прогноза дебита; это дневной временной ряд, построенный из `production`, который можно напрямую рисовать по `date`.
+  - `well_id` - идентификатор скважины.
+  - `date` - дата строки; главный X-axis для line chart.
+  - `name` - имя скважины.
+  - `field_name` - месторождение.
+  - `region` - регион добычи.
+  - `status` - статус скважины.
+  - `daily_oil_ton` - фактический суточный дебит нефти.
+  - `gas_m3` - сопутствующая добыча газа за день.
+  - `water_m3` - добытая вода за день.
+  - `energy_kwh` - энергозатраты за день.
+  - `downtime_hours` - часы простоя за день.
+  - `temperature` - технологическая температура.
+  - `pressure` - технологическое давление.
+  - `predicted_daily_oil_ton` - предсказанный суточный дебит.
+  - `error` - разница между фактом и прогнозом.
+  - `abs_error` - абсолютная ошибка прогноза.
+  - `pct_error` - относительная ошибка прогноза.
+  - `model_name` - имя модели, которая рассчитала прогноз.
+  - `prediction_type` - тип строки: `daily`, то есть обычная дневная строка для визуализаций и фильтров.
+
+- `pump_risk_dashboard` - насос-таймстемп.
+  - `pump_id` - идентификатор насоса.
+  - `well_id` - связанная скважина.
+  - `name` - имя скважины для удобства чтения.
+  - `field_name` - месторождение.
+  - `region` - регион добычи.
+  - `status` - статус скважины.
+  - `timestamp` - момент измерения телеметрии.
+  - `temperature` - температура насоса.
+  - `vibration` - вибрация; полезна для диагностики предаварийных состояний.
+  - `current` - ток двигателя.
+  - `rpm` - обороты.
+  - `pressure` - давление на насосе.
+  - `anomaly_score` - оценка аномальности, рассчитанная моделью.
+  - `is_anomaly` - бинарный флаг аномалии.
+  - `failure_within_24h` - признак отказа в ближайшие 24 часа.
+  - `failure_probability` - вероятность отказа по классификатору.
+  - `risk_score` - итоговый риск-скор, удобный для ранжирования насосов.
+
+## Дашборд Superset
+
+### Задание 1. Добыча
+
+<img src="./скрины/Задача 1 добыча.png" width="1000" alt="Скрин">
+
+
+### Задание 2. Прогноз дебита
+
+<img src="./скрины/Задача 2 прогноз дебита.png" width="1000" alt="Скрин">
+
+### Задание 3. Аномалии и отказ оборудования
+
+<img src="./скрины/Задача 3 аномалии перед отказом.png" width="1000" alt="Скрин">
+
+
+### Задание 4. Логистика
+
+<img src="./скрины/Задача 4  Логистика.png" width="1000" alt="Скрин">
+

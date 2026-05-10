@@ -1,0 +1,38 @@
+FROM postgres:18 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV CARGO_HOME=/usr/local/cargo
+ENV RUSTUP_HOME=/usr/local/rustup
+ENV PATH=/usr/local/cargo/bin:${PATH}
+ENV CARGO_PGRX_VERSION=0.16.1
+ENV PG_MAJOR=18
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        clang \
+        curl \
+        git \
+        libclang-dev \
+        llvm-dev \
+        pkg-config \
+        postgresql-server-dev-18 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- -y --profile minimal --default-toolchain stable
+
+RUN cargo install --force --locked cargo-pgrx@${CARGO_PGRX_VERSION}
+
+WORKDIR /tmp
+RUN git clone --depth 1 https://github.com/CrunchyData/pg_parquet.git
+
+WORKDIR /tmp/pg_parquet
+RUN cargo pgrx init --pg${PG_MAJOR} /usr/lib/postgresql/${PG_MAJOR}/bin/pg_config
+RUN cargo pgrx install --release --features pg${PG_MAJOR}
+
+FROM postgres:18
+
+COPY --from=builder /usr/lib/postgresql/18/lib/pg_parquet.so /usr/lib/postgresql/18/lib/pg_parquet.so
+COPY --from=builder /usr/share/postgresql/18/extension/pg_parquet* /usr/share/postgresql/18/extension/
