@@ -1,6 +1,6 @@
 Проверка работы
 
-
+```bash
 ➜  go_hw git:(main) ✗ /usr/local/go/bin/go  run ./task01
 3+2
 =
@@ -105,3 +105,4 @@ go_hw git:(main) ✗ /usr/local/go/bin/go run ./task09
 Минимум: 2
 Чётных: 1
 Нечётных: 2 
+```
